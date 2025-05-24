@@ -5,39 +5,46 @@ project(usbscale_node)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Make sure to source ROS 2 Humble before configuring:
+# Source ROS2 Humble:
 #   source /opt/ros/humble/setup.bash
 
-# Find ROS2 packages (header-only or link libraries)
+# Find ament and ROS 2 packages
+find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 
-# Use pkg-config to locate libusb-1.0
+# Use pkg-config to find libusb-1.0
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
-# Include directories for libusb and std_msgs
+# Include directories for libusb
 include_directories(
   ${LIBUSB_INCLUDE_DIRS}
-  ${std_msgs_INCLUDE_DIRS}
 )
 
-# Library directories for libusb
-link_directories(${LIBUSB_LIBRARY_DIRS})
+# Link directories for libusb
+link_directories(
+  ${LIBUSB_LIBRARY_DIRS}
+)
 
-# Build the ROS2 node
+# Build the node executable
 add_executable(usbscale_node
   usbscale_node.cpp
 )
 
-# Link against libusb and rclcpp
+# Link against ROS2 and libusb
+ament_target_dependencies(usbscale_node
+  rclcpp
+  std_msgs
+)
 target_link_libraries(usbscale_node
   ${LIBUSB_LIBRARIES}
-  rclcpp::rclcpp
 )
 
-# Optional: install the executable in 'bin/' if you wish
+# Install rule (optional)
 install(
   TARGETS usbscale_node
   RUNTIME DESTINATION bin
 )
+
+ament_package()
