@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 //
 // This program uses libusb-1.0 (not the older libusb-0.1) for USB
@@ -148,6 +149,34 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     return 0;
 }
 
+
+/// Continuously read the scale and print weight every 0.5 seconds.
+/// This never returns.
+static void read_loop(libusb_device_handle *handle, uint8_t endpoint) {
+    unsigned char data[WEIGH_REPORT_SIZE];
+    int transferred, r;
+
+    while (true) {
+        r = libusb_interrupt_transfer(
+            handle,
+            endpoint,
+            data,
+            WEIGH_REPORT_SIZE,
+            &transferred,
+            1000      // 1 second timeout (adjust if you like)
+        );
+
+        if (r == 0) {
+            // print_scale_data prints and returns 0 on a final weight
+            print_scale_data(data);
+        } else {
+            fprintf(stderr, "Read error: %s\n", libusb_error_name(r));
+        }
+
+        usleep(500000);  // sleep 500 ms
+    }
+}
+
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
 //
@@ -235,6 +264,9 @@ int main(int argc, char **argv)
     //
     libusb_claim_interface(handle, 0);
 
+    uint8_t ep = get_first_endpoint_address(dev);
+    read_loop(handle, ep);
+    // never reaches here
 
 
     /*
