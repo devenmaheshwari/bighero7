@@ -50,6 +50,19 @@ function Session() {
       });
     };
 
+    const topic = new ROSLIB.Topic({
+        ros,
+        name: "/scale/weight",
+        messageType: "std_msgs/Float64",
+      });
+      
+      topic.subscribe((message) => {
+        const weightDisplay = document.getElementById("weightDisplay");
+        weightDisplay.innerText = message.data.toFixed(2) + " g";
+      });
+      
+
+
     const createTrajectoryClient = () => {
       trajectoryClientRef.current = new ROSLIB.ActionClient({
         ros,
@@ -150,6 +163,7 @@ function Session() {
           </li>
         </ul>
       </div>
+      <p>Weight: <span id="weightDisplay">--</span></p>
     </div>
   );
 }
