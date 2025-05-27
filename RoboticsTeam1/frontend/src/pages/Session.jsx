@@ -1,6 +1,34 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 function Session() {
+  const trajectoryClientRef = useRef(null);
+  const rosRef = useRef(null);
+
+  const executeFollowJointTrajectory = (jointNames, jointPositions) => {
+    if (!trajectoryClientRef.current) {
+      console.error("Trajectory client not initialized");
+      return;
+    }
+
+    const goal = new window.ROSLIB.Goal({
+      actionClient: trajectoryClientRef.current,
+      goalMessage: {
+        trajectory: {
+          header: { stamp: { secs: 0, nsecs: 0 } },
+          joint_names: jointNames,
+          points: [
+            {
+              positions: jointPositions,
+              time_from_start: { secs: 1, nsecs: 0 },
+            },
+          ],
+        },
+      },
+    });
+
+    goal.send();
+  };
+
   useEffect(() => {
     const ROSLIB = window.ROSLIB;
 
@@ -8,8 +36,7 @@ function Session() {
       url: "ws://rocky.hcrlab.cs.washington.edu:9090",
     });
 
-    let trajectoryClient;
-    let cmdVelTopic;
+    rosRef.current = ros;
 
     const subscribeToCameraVideo = () => {
       const cameraImage = document.getElementById("cameraImage");
@@ -24,97 +51,49 @@ function Session() {
     };
 
     const createTrajectoryClient = () => {
-      trajectoryClient = new ROSLIB.ActionHandle({
+      trajectoryClientRef.current = new ROSLIB.ActionClient({
         ros,
-        name: "/stretch_controller/follow_joint_trajectory",
-        actionType: "control_msgs/action/FollowJointTrajectory",
+        serverName: "/stretch_controller/follow_joint_trajectory",
+        actionName: "control_msgs/FollowJointTrajectoryAction",
       });
     };
 
     const createCmdVelTopic = () => {
-      cmdVelTopic = new ROSLIB.Topic({
-        ros,
-        name: "/stretch/cmd_vel",
-        messageType: "geometry_msgs/Twist",
-      });
+      // Placeholder for other topics if needed
     };
 
-    const executeFollowJointTrajectory = (jointNames, jointPositions) => {
-      const goal = new ROSLIB.ActionGoal({
-        trajectory: {
-          header: { stamp: { secs: 0, nsecs: 0 } },
-          joint_names: jointNames,
-          points: [
-            {
-              positions: jointPositions,
-              time_from_start: { secs: 1, nsecs: 0 },
-            },
-          ],
-        },
-      });
-      trajectoryClient.createClient(goal);
-    };
+    ros.on("connection", () => {
+      document.getElementById("connection").innerHTML = "Connected to Stretch.";
+      document.getElementById("camera").style.display = "block";
+      document.getElementById("buttons").style.display = "block";
 
-    const rosEvents = () => {
-      ros.on("connection", () => {
-        document.getElementById("connection").innerHTML = "Connected to Stretch.";
-        document.getElementById("camera").style.display = "block";
-        document.getElementById("buttons").style.display = "block";
+      subscribeToCameraVideo();
+      createTrajectoryClient();
+      createCmdVelTopic();
+    });
 
-        subscribeToCameraVideo();
-        createTrajectoryClient();
-        createCmdVelTopic();
-      });
+    ros.on("error", (error) => {
+      document.getElementById("connection").innerHTML =
+        "Error connecting to Stretch (see console for details)";
+      console.error("Error connecting to websocket server:", error);
+    });
 
-      ros.on("error", (error) => {
-        document.getElementById("connection").innerHTML =
-          "Error connecting to Stretch (see console for details)";
-        console.error("Error connecting to websocket server:", error);
-      });
-
-      ros.on("close", () => {
-        document.getElementById("connection").innerHTML = "Disconnected";
-        document.getElementById("camera").style.display = "none";
-        document.getElementById("buttons").style.display = "none";
-        console.log("Connection to websocket server closed.");
-      });
-    };
-
-    rosEvents();
+    ros.on("close", () => {
+      document.getElementById("connection").innerHTML = "Disconnected";
+      document.getElementById("camera").style.display = "none";
+      document.getElementById("buttons").style.display = "none";
+      console.log("Connection to websocket server closed.");
+    });
   }, []);
 
-  const openGripper = () => {
-    executeFollowJointTrajectory(["gripper_aperture"], [0.1]);
-  };
-
-  const closeGripper = () => {
-    executeFollowJointTrajectory(["gripper_aperture"], [-0.03]);
-  };
-
-  const moveLiftToTop = () => {
-    executeFollowJointTrajectory(["joint_lift"], [1.1]);
-  };
-
-  const moveLiftToMiddle = () => {
-    executeFollowJointTrajectory(["joint_lift"], [0.6]);
-  };
-
-  const moveBaseForward = () => {
-    executeFollowJointTrajectory(["translate_mobile_base"], [0.1]);
-  };
-
-  const moveBaseBackward = () => {
-    executeFollowJointTrajectory(["translate_mobile_base"], [-0.1]);
-  };
-
-  const rollWrist = () => {
-    executeFollowJointTrajectory(["joint_wrist_roll"], [-0.1]);
-  };
-
-  const unrollWrist = () => {
-    executeFollowJointTrajectory(["joint_wrist_roll"], [0.1]);
-  };
-
+  const openGripper = () => executeFollowJointTrajectory(["gripper_aperture"], [0.1]);
+  const closeGripper = () => executeFollowJointTrajectory(["gripper_aperture"], [-0.03]);
+  const moveLiftToTop = () => executeFollowJointTrajectory(["joint_lift"], [1.1]);
+  const moveLiftToMiddle = () => executeFollowJointTrajectory(["joint_lift"], [0.6]);
+  const moveBaseForward = () => executeFollowJointTrajectory(["translate_mobile_base"], [0.1]);
+  const moveBaseBackward = () => executeFollowJointTrajectory(["translate_mobile_base"], [-0.1]);
+  const rollWrist = () => executeFollowJointTrajectory(["joint_wrist_roll"], [-0.1]);
+  const unrollWrist = () => executeFollowJointTrajectory(["joint_wrist_roll"], [0.1]);
   const followPath = () => {
     executeFollowJointTrajectory(["translate_mobile_base"], [0.1]);
     executeFollowJointTrajectory(["rotate_mobile_base"], [0.1]);
