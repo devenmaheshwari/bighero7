@@ -70,7 +70,7 @@ public:
     endpoint_ = get_first_endpoint_address(dev);
 
     // Start periodic timer
-    timer_ = this->create_wall_timer(500ms, std::bind(&UsbScaleNode::on_timer, this));
+    timer_ = this->create_wall_timer(250ms, std::bind(&UsbScaleNode::on_timer, this));
   }
 
   ~UsbScaleNode() override {
@@ -88,30 +88,30 @@ private:
     int transferred = 0;
     int r = libusb_interrupt_transfer(
       handle_, endpoint_, data, WEIGH_REPORT_SIZE, &transferred, 1000);
-    if (r == 0 && transferred == WEIGH_REPORT_SIZE) {
-      // Parse only final weights
-      uint8_t report = data[0];
-      uint8_t status = data[1];
-      if ((report == 0x03 || report == 0x04) && status == 0x04) {
-        int8_t expt = static_cast<int8_t>(data[3]);
-        double raw = static_cast<double>(le16toh((data[5] << 8) | data[4]));
-        double weight = raw * std::pow(10, expt);
-        
-        // Publish to ROS
-        auto msg = std_msgs::msg::Float64();
-        msg.data = weight;
-        publisher_->publish(msg);
+    if (r == 0) {
+      if (transferred == WEIGH_REPORT_SIZE) {
+        // Valid weight reading
+        uint8_t report = data[0];
+        uint8_t status = data[1];
+        if ((report == 0x03 || report == 0x04) && status == 0x04) {
+          int8_t expt = static_cast<int8_t>(data[3]);
+          double raw = static_cast<double>(le16toh((data[5] << 8) | data[4]));
+          double weight = raw * std::pow(10, expt);
 
-        // Log info-level
-        RCLCPP_INFO(this->get_logger(), "Weight: %.3f", weight);
-        
-        // Debug print to console if enabled
+          auto msg = std_msgs::msg::Float64();
+          msg.data = weight;
+          publisher_->publish(msg);
+          RCLCPP_INFO(this->get_logger(), "Weight: %.3f", weight);
+          if (debug_) std::cout << "[DEBUG] Weight (raw): " << weight << std::endl;
+        }
+      } else {
+        // Optional: log info/debug that a short or non-weight packet was received
         if (debug_) {
-          std::cout << "[DEBUG] Weight (raw): " << weight << std::endl;
+          RCLCPP_DEBUG(this->get_logger(), "Short transfer (%d bytes)", transferred);
         }
       }
     } else {
-      RCLCPP_WARN(this->get_logger(), "USB transfer error: %s", libusb_error_name(r));
+      RCLCPP_ERROR(this->get_logger(), "USB transfer failed: %s", libusb_error_name(r));
     }
   }
 
